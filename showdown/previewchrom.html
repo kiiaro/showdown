@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Showroom Interativo | ChromaSolar</title>
+    <style>
+        :root {
+            --chroma-green: #39ff14; /* Cor neon do seu produto */
+            --chroma-yellow: #f1c40f;
+            --chroma-blue: #3498db;
+            --dark-bg: #1a1a1a;
+            --light-bg: #282828;
+            --text-color: #f0f0f0;
+            --font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+        }
+        body { margin: 0; font-family: var(--font-family); background-color: var(--dark-bg); color: var(--text-color); overflow: hidden; }
+        #scene-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; cursor: grab; }
+        #scene-container:active { cursor: grabbing; }
+        #ui-container { position: fixed; bottom: 3vh; left: 50%; transform: translateX(-50%); width: 90%; max-width: 800px; padding: 20px; box-sizing: border-box; z-index: 10; display: flex; flex-direction: column; align-items: center; gap: 20px; pointer-events: none; }
+        #info-box { background-color: rgba(40, 40, 40, 0.85); backdrop-filter: blur(10px); padding: 20px 30px; border-radius: 16px; text-align: center; width: 100%; border: 1px solid rgba(255, 255, 255, 0.1); pointer-events: auto; }
+        #info-box h2 { margin: 0 0 10px 0; color: var(--chroma-green); font-size: 1.5em; }
+        #info-box p { margin: 0; line-height: 1.6; font-size: 1em; color: #ccc; }
+        #controls { display: flex; gap: 15px; background-color: rgba(40, 40, 40, 0.85); backdrop-filter: blur(10px); padding: 12px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); pointer-events: auto; }
+        .control-btn { padding: 12px 25px; border: 1px solid transparent; border-radius: 12px; background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); font-size: 1em; cursor: pointer; transition: all 0.3s ease; font-weight: 600; }
+        .control-btn:hover { background-color: rgba(255, 255, 255, 0.2); }
+        .control-btn.active { background-color: var(--chroma-green); color: var(--dark-bg); border-color: var(--chroma-green); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(57, 255, 20, 0.3); }
+    </style>
+</head>
+<body>
+    <div id="scene-container"></div>
+    <div id="ui-container">
+        </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/",
+                "@tweenjs/tween.js": "https://unpkg.com/@tweenjs/tween.js@23.1.2/dist/tween.esm.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'; // Importa o carregador de modelos
+        import TWEEN from '@tweenjs/tween.js';
+
+        let scene, camera, renderer, controls, sun;
+        const flows = {};
+
+        function init() {
+            // ... (Setup de cena, câmera, luz, etc. - sem alterações)
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(15, 12, 25);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            document.getElementById('scene-container').appendChild(renderer.domElement);
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.target.set(0, 2, 0);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            sun = new THREE.DirectionalLight(0xffffff, 3.0);
+            sun.position.set(-20, 25, 15);
+            sun.castShadow = true;
+            sun.shadow.mapSize.width = 2048;
+            sun.shadow.mapSize.height = 2048;
+            scene.add(sun);
+
+            createSceneObjects();
+            createEnergyFlows();
+            setupUI();
+            animate();
+        }
+
+        function createSceneObjects() {
+            // ... (Criação do chão, casa, árvores - sem alterações)
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+            const houseGroup = new THREE.Group();
+            const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf0f0f0 });
+            const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4a4a });
+            const mainBlock = new THREE.Mesh(new THREE.BoxGeometry(10, 5, 7), wallMaterial);
+            mainBlock.position.y = 2.5; mainBlock.castShadow = true; mainBlock.receiveShadow = true; houseGroup.add(mainBlock);
+            const sideBlock = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 6), wallMaterial);
+            sideBlock.position.set(-5, 2, 5.5); sideBlock.castShadow = true; sideBlock.receiveShadow = true; houseGroup.add(sideBlock);
+            const mainRoof = new THREE.Mesh(new THREE.BoxGeometry(10.2, 0.3, 7.2), roofMaterial);
+            mainRoof.position.y = 5.15; houseGroup.add(mainRoof);
+            const sideRoof = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.3, 6.2), roofMaterial);
+            sideRoof.position.set(-5, 4.15, 5.5); houseGroup.add(sideRoof);
+            const solarPanel = new THREE.Mesh(new THREE.PlaneGeometry(8, 5), new THREE.MeshStandardMaterial({ color: 0x112244, side: THREE.DoubleSide }));
+            solarPanel.position.set(0, 5.4, 0); solarPanel.rotation.x = -0.2; solarPanel.castShadow = true; houseGroup.add(solarPanel);
+            scene.add(houseGroup);
+            const grid = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 10, 8), new THREE.MeshStandardMaterial({ color: 0x888888 }));
+            grid.position.set(15, 5, 0); grid.castShadow = true; scene.add(grid);
+            
+            // --- CARREGAMENTO DO MODELO 3D DA BATERIA ---
+            const loader = new GLTFLoader();
+            
+            // <<< PONTO MAIS IMPORTANTE! >>>
+            // Substitua o link abaixo pelo seu link RAW do GitHub.
+            const urlBateria = 'COLE_AQUI_O_SEU_LINK_DIRETO_DO_GITHUB_PARA_O_ARQUIVO_GLB';
+
+            loader.load(urlBateria, 
+                // Função onLoad (quando o modelo carregar com sucesso)
+                (gltf) => {
+                    const suaBateria = gltf.scene;
+                    
+                    // Ajusta a posição, escala e sombras
+                    suaBateria.position.set(6, 0, 2);
+                    suaBateria.scale.set(1, 1, 1); // Ajuste a escala se necessário
+                    
+                    suaBateria.traverse((child) => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+                    
+                    scene.add(suaBateria);
+                },
+                // Função onProgress (opcional)
+                undefined,
+                // Função onError (se der erro ao carregar)
+                (error) => {
+                    console.error('Ocorreu um erro ao carregar o modelo 3D:', error);
+                    // Como fallback, cria a bateria placeholder se o modelo não carregar
+                    createPlaceholderBattery();
+                }
+            );
+        }
+
+        function createPlaceholderBattery() {
+            // Este código só roda se o carregamento do seu modelo falhar
+            const batteryGroup = new THREE.Group();
+            const batteryBody = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.0, 1.2), new THREE.MeshStandardMaterial({ color: 0xe0e0e0 }));
+            batteryGroup.add(batteryBody);
+            const ledMaterial = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
+            const ledTop = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.1, 1.25), ledMaterial);
+            ledTop.position.y = 0.8; batteryGroup.add(ledTop);
+            const ledBottom = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.1, 1.25), ledMaterial);
+            ledBottom.position.y = -0.8; batteryGroup.add(ledBottom);
+            batteryGroup.position.set(6, 1.0, 2);
+            scene.add(batteryGroup);
+        }
+
+        // ... (Restante do código: createEnergyFlows, EnergyFlow, setupUI, animate - sem alterações)
+        function createEnergyFlows() {const startPos = { solar: new THREE.Vector3(0, 5.5, 0), battery: new THREE.Vector3(6, 1, 2), grid: new THREE.Vector3(15, 5, 0) }; const endPos = { house: new THREE.Vector3(0, 2.5, 0), battery: new THREE.Vector3(6, 1, 2), grid: new THREE.Vector3(15, 5, 0) }; flows.solarToHouse = new EnergyFlow(startPos.solar, endPos.house, 0xf1c40f); flows.solarToBattery = new EnergyFlow(startPos.solar, endPos.battery, 0xf1c40f); flows.batteryToHouse = new EnergyFlow(startPos.battery, endPos.house, 0x39ff14); flows.batteryToGrid = new EnergyFlow(startPos.battery, endPos.grid, 0x39ff14);}
+        class EnergyFlow { constructor(startVec, endVec, color) { this.start = startVec; this.end = endVec; this.particles = []; const material = new THREE.MeshBasicMaterial({ color: color, toneMapped: false }); for (let i = 0; i < 60; i++) { const particle = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), material); particle.position.copy(this.start); particle.visible = false; this.particles.push({ mesh: particle, life: 0 }); scene.add(particle.mesh); } this.isActive = false; this.particleIndex = 0; } update(deltaTime) { if (this.isActive) { this.particleIndex = (this.particleIndex + 1) % this.particles.length; const p = this.particles[this.particleIndex]; if (!p.mesh.visible) { p.mesh.visible = true; p.life = 0; p.mesh.position.copy(this.start); } } this.particles.forEach(p => { if (p.mesh.visible) { p.life += deltaTime; const alpha = p.life / 2.5; p.mesh.position.lerpVectors(this.start, this.end, alpha); const scale = Math.max(0, 1.0 - alpha); p.mesh.scale.set(scale, scale, scale); if (alpha >= 1) { p.mesh.visible = false; p.life = 0; } } }); } setActive(state) { this.isActive = state; if (!state) { this.particles.forEach(p => p.mesh.visible = false); } } }
+        function setupUI() { const scenarios = { store: { title: "Gerando e Armazenando Energia", description: "Durante o dia, os painéis solares geram energia limpa. A casa consome o necessário e o excedente é armazenado de forma inteligente na sua bateria ChromaSolar.", activeFlows: ["solarToHouse", "solarToBattery"], cameraPos: { x: 15, y: 12, z: 25 }, sunIntensity: 3.0 }, use: { title: "Usando sua Energia à Noite", description: "Ao anoitecer, o sistema automaticamente passa a usar a energia armazenada na bateria para alimentar sua casa, garantindo economia e independência da rede.", activeFlows: ["batteryToHouse"], cameraPos: { x: -10, y: 6, z: 20 }, sunIntensity: 0.3 }, sell: { title: "Rentabilizando seu Investimento", description: "Quando a bateria está cheia e a geração solar é alta, o sistema pode vender o excedente de energia para a concessionária, gerando créditos na sua conta.", activeFlows: ["solarToHouse", "batteryToGrid"], cameraPos: { x: 20, y: 8, z: 20 }, sunIntensity: 3.0 }}; function setActiveScenario(scenarioName) { const scenario = scenarios[scenarioName]; document.getElementById('info-title').textContent = scenario.title; document.getElementById('info-description').textContent = scenario.description; document.querySelectorAll('.control-btn').forEach(btn => btn.classList.toggle('active', btn.id === `btn-${scenarioName}`)); new TWEEN.Tween(camera.position).to(scenario.cameraPos, 1500).easing(TWEEN.Easing.Quadratic.InOut).start(); new TWEEN.Tween(sun).to({ intensity: scenario.sunIntensity }, 1500).easing(TWEEN.Easing.Quadratic.InOut).start(); Object.keys(flows).forEach(key => flows[key].setActive(scenario.activeFlows.includes(key))); } document.getElementById('btn-store').addEventListener('click', () => setActiveScenario('store')); document.getElementById('btn-use').addEventListener('click', () => setActiveScenario('use')); document.getElementById('btn-sell').addEventListener('click', () => setActiveScenario('sell')); setActiveScenario('store'); }
+        const clock = new THREE.Clock(); function animate() { requestAnimationFrame(animate); const deltaTime = clock.getDelta(); controls.update(); TWEEN.update(); Object.values(flows).forEach(flow => flow.update(deltaTime)); renderer.render(scene, camera); }
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+        
+        init();
+    </script>
+</body>
+</html>
